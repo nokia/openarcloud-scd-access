@@ -37,6 +37,41 @@ export const geoPoseSchema = z.object({
     quaternion: quaternionSchema,
 });
 
+/** SpatialDDS-style `Vec3` (`x`, `y`, `z`). */
+export const vec3Schema = z.object({
+    x: z.number(),
+    y: z.number(),
+    z: z.number(),
+});
+
+/** SpatialDDS `spatial::common::FrameRef` on JSON wire. */
+export const frameRefSchema = z.object({
+    uuid: z.string().min(1),
+    fqn: z.string().min(1),
+});
+
+/** SpatialDDS Core `PoseSE3`: translation `t` + quaternion `q`. */
+export const poseSE3Schema = z.object({
+    t: vec3Schema,
+    q: quaternionSchema,
+});
+
+/**
+ * SpatialDDS-style **FramedPose** for SCR content (pose expressed in **frameRef**).
+ * Optional `cov` / `stamp` are accepted as structured or unknown JSON for forward compatibility.
+ */
+export const framedPoseSchema = z.object({
+    frameRef: frameRefSchema,
+    pose: poseSE3Schema,
+    cov: z.unknown().optional(),
+    stamp: z
+        .object({
+            sec: z.number(),
+            nanosec: z.number(),
+        })
+        .optional(),
+});
+
 export const refSchema = z.object({
     contentType: z.string(),
     url: z.string().url(),
@@ -47,7 +82,11 @@ export const defSchema = z.object({
     value: z.string(),
 });
 
-export const contentSchema = z.object({
+/**
+ * SCR **content** body: requires **geopose** and/or **framedPose** (at least one).
+ * Legacy records supply **geopose** only; indoor / metric content may use **framedPose** only.
+ */
+const contentSchemaBase = z.object({
     id: z.string(),
     type: z.string(),
     title: z.string(),
@@ -55,10 +94,20 @@ export const contentSchema = z.object({
     keywords: z.array(z.string()).optional(),
     placekey: z.string().optional(),
     refs: z.array(refSchema).optional(),
-    geopose: geoPoseSchema,
+    geopose: geoPoseSchema.optional(),
+    framedPose: framedPoseSchema.optional(),
     size: z.number().optional(),
     bbox: z.string().optional(),
     definitions: z.array(defSchema).optional(),
+});
+
+export const contentSchema = contentSchemaBase.superRefine((data, ctx) => {
+    if (data.geopose === undefined && data.framedPose === undefined) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'SCR content must include geopose and/or framedPose',
+        });
+    }
 });
 
 export const scrNoIdSchema = z.object({
@@ -80,6 +129,8 @@ export type Ref = z.infer<typeof refSchema>;
 export type Geopose = z.infer<typeof geoPoseSchema>;
 export type Quaternion = z.infer<typeof quaternionSchema>;
 export type Position = z.infer<typeof positionSchema>;
+export type FrameRef = z.infer<typeof frameRefSchema>;
+export type FramedPose = z.infer<typeof framedPoseSchema>;
 // Allows to return local JSON response for debugging
 // When this is true, no server access is done, but a local result is returned instead.
 export let local = false;
@@ -165,7 +216,8 @@ export async function postContent(url: string, topic: string, scr: SCRnoId, toke
         return 'OK';
     }
 
-    if (token === undefined || token.length === 0) {
+    // token may be empty when the backend runs with auth disabled
+    if (token === undefined) {
         throw new Error(`token is invalid: ${token}`);
     }
     scrNoIdSchema.parse(scr);
@@ -194,7 +246,8 @@ export async function putContent(url: string, topic: string, scr: SCR, id: strin
         return Promise.resolve('OK');
     }
 
-    if (id === undefined || id.length === 0 || token === undefined || token.length === 0) {
+    // token may be empty when the backend runs with auth disabled
+    if (id === undefined || id.length === 0 || token === undefined) {
         throw new Error(`Check parameters. id: ${id}, token: ${token}`);
     }
     scrSchema.parse(scr);
@@ -285,6 +338,26 @@ export const localResults = [
         },
         tenant: 'oscptest',
         timestamp: 20200924,
+    },
+    {
+        id: 'e55b7929d22ac62f',
+        type: 'scr',
+        content: {
+            id: '333',
+            type: '3d',
+            title: 'framed-only model',
+            url: 'https://www.example.com/framed.glb',
+            framedPose: {
+                frameRef: { uuid: 'map-room', fqn: 'vendor:MapRoom' },
+                pose: {
+                    t: { x: 1, y: 0, z: -0.5 },
+                    q: { x: 0, y: 0, z: 0, w: 1 },
+                },
+            },
+            size: 50,
+        },
+        tenant: 'oscptest',
+        timestamp: 20200925,
     },
 ];
 

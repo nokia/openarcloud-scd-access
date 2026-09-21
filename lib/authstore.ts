@@ -16,6 +16,18 @@ export const loading = writable(false);
 export const authenticated = writable(false);
 export const user = writable<User | undefined>(undefined);
 
+/** Dummy user for local/compose no-auth mode (backends use provider/tenant `noauthtest`). */
+const NO_AUTH_USER: User = {
+    name: 'noauthtest',
+    nickname: 'noauthtest',
+    sub: 'noauth|noauthtest',
+};
+
+function isAuthDisabled(auth_domain: string, auth_client_id: string, auth_audience: string, auth_scope: string): boolean {
+    const values = [auth_domain, auth_client_id, auth_audience, auth_scope];
+    return values.some((v) => !v || v.trim() === '' || v.trim().toLowerCase() === 'disabled');
+}
+
 function createAuthStore(): {
     auth0: Auth0Client | null;
     getToken: () => Promise<string | undefined>;
@@ -24,30 +36,50 @@ function createAuthStore(): {
     init: (auth_domain: string, auth_client_id: string, auth_audience: string, auth_scope: string) => Promise<void>;
 } {
     let auth0: Auth0Client | null = null;
+    let authDisabled = false;
 
-    // The application using this library should pass the settings as parameters here
+    // The application using this library should pass the settings as parameters here.
+    // Empty or "disabled" config enables local no-auth/dev mode (no Auth0 client).
     async function init(auth_domain: string, auth_client_id: string, auth_audience: string, auth_scope: string) {
-        const client = await createAuth0Client({
-            domain: auth_domain,
-            clientId: auth_client_id,
-            authorizationParams: {
-                audience: auth_audience,
-                scope: auth_scope,
-            },
-        });
-        auth0 = client;
+        loading.set(true);
+        try {
+            if (isAuthDisabled(auth_domain, auth_client_id, auth_audience, auth_scope)) {
+                auth0 = null;
+                authDisabled = true;
+                user.set(NO_AUTH_USER);
+                authenticated.set(true);
+                return;
+            }
 
-        const query = window.location.search;
-        if (query.includes('code=') && query.includes('state=')) {
-            await client.handleRedirectCallback();
-            window.history.replaceState({}, document.title, '/scd');
+            authDisabled = false;
+            const client = await createAuth0Client({
+                domain: auth_domain,
+                clientId: auth_client_id,
+                authorizationParams: {
+                    audience: auth_audience,
+                    scope: auth_scope,
+                },
+            });
+            auth0 = client;
+
+            const query = window.location.search;
+            if (query.includes('code=') && query.includes('state=')) {
+                await client.handleRedirectCallback();
+                window.history.replaceState({}, document.title, '/scd');
+            }
+
+            user.set(await client.getUser());
+            authenticated.set(await client.isAuthenticated());
+        } finally {
+            loading.set(false);
         }
-
-        user.set(await client.getUser());
-        authenticated.set(await client.isAuthenticated());
     }
 
     async function login() {
+        if (authDisabled) {
+            return;
+        }
+
         await auth0
             ?.loginWithRedirect({
                 authorizationParams: {
@@ -60,6 +92,10 @@ function createAuthStore(): {
     }
 
     async function logout() {
+        if (authDisabled) {
+            return;
+        }
+
         await auth0
             ?.logout({
                 logoutParams: {
@@ -75,8 +111,19 @@ function createAuthStore(): {
     }
 
     async function getToken() {
+        if (authDisabled) {
+            return '';
+        }
         return await auth0?.getTokenSilently();
     }
 
-    return { auth0, getToken, login, logout, init };
+    return {
+        get auth0() {
+            return auth0;
+        },
+        getToken,
+        login,
+        logout,
+        init,
+    };
 }

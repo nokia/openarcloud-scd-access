@@ -1,11 +1,12 @@
 {
   "name": "@oarc/scd-access",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Access to Spatial Content Discovery of Open Spatial Computing Platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --import tsx --test ./test/contentSchema.test.ts",
     "prepublish": "tsc",
     "build": "tsc"
   },

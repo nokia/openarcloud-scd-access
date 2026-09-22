@@ -37,40 +37,92 @@ export const geoPoseSchema = z.object({
     quaternion: quaternionSchema,
 });
 
-/** SpatialDDS-style `Vec3` (`x`, `y`, `z`). */
-export const vec3Schema = z.object({
-    x: z.number(),
-    y: z.number(),
-    z: z.number(),
-});
-
-/** SpatialDDS `spatial::common::FrameRef` on JSON wire. */
-export const frameRefSchema = z.object({
-    uuid: z.string().min(1),
-    fqn: z.string().min(1),
-});
-
-/** SpatialDDS Core `PoseSE3`: translation `t` + quaternion `q`. */
-export const poseSE3Schema = z.object({
-    t: vec3Schema,
-    q: quaternionSchema,
-});
+/**
+ * SpatialDDS 1.8 `spatial::common::Vec3` — JSON array of 3 numbers, or `{x,y,z}`.
+ * Canonical on the SpatialDDS JSON wire is `[x, y, z]`.
+ */
+export const vec3Schema = z.union([z.tuple([z.number(), z.number(), z.number()]), z.array(z.number()).length(3), z.object({ x: z.number(), y: z.number(), z: z.number() })]);
 
 /**
- * SpatialDDS-style **FramedPose** for SCR content (pose expressed in **frameRef**).
- * Optional `cov` / `stamp` are accepted as structured or unknown JSON for forward compatibility.
+ * SpatialDDS 1.8 `spatial::common::QuaternionXYZW` — JSON array of 4 numbers in GeoPose `(x, y, z, w)` order,
+ * or the SCR `{x,y,z,w}` object used by `geopose.quaternion`.
  */
-export const framedPoseSchema = z.object({
-    frameRef: frameRefSchema,
-    pose: poseSE3Schema,
-    cov: z.unknown().optional(),
-    stamp: z
+export const quaternionXyzwSchema = z.union([z.tuple([z.number(), z.number(), z.number(), z.number()]), z.array(z.number()).length(4), quaternionSchema]);
+
+/** SpatialDDS 1.8 `builtin::Time` (`@extensibility(APPENDABLE)`). */
+export const timeSchema = z
+    .object({
+        sec: z.number(),
+        nanosec: z.number().min(0).max(999_999_999),
+    })
+    .passthrough();
+
+/** SpatialDDS 1.8 `spatial::common::CoordConvention` (FrameRef, added in 1.6). Default when omitted is ENU. */
+export const coordConventionSchema = z.enum(['ENU', 'CV', 'GRAPHICS', 'UNITY_LH', 'NED', 'OTHER']);
+
+/** SpatialDDS 1.8 `spatial::common::CovarianceType`. */
+export const covarianceTypeSchema = z.enum(['COV_NONE', 'COV_POS3', 'COV_POSE6', 'COV_ROT3', 'COV_POSE6_TWIST6']);
+
+/**
+ * SpatialDDS 1.8 `spatial::core::CovMatrix` JSON shape used in spec examples:
+ * `{ "type": "COV_POSE6", "pose": [ ... 36 numbers ] }` (and analogous payloads for other types).
+ */
+export const covMatrixSchema = z
+    .object({
+        type: covarianceTypeSchema,
+        none: z.unknown().optional(),
+        pos: z.array(z.number()).length(9).optional(),
+        pose: z.array(z.number()).length(36).optional(),
+        rot: z.array(z.number()).length(9).optional(),
+        pose_twist: z.array(z.number()).length(144).optional(),
+    })
+    .passthrough();
+
+/**
+ * SpatialDDS 1.8 `spatial::common::FrameRef` on JSON wire (`APPENDABLE`).
+ * `uuid` and `fqn` are required; `coord_convention` is optional (absent ⇒ ENU).
+ */
+export const frameRefSchema = z
+    .object({
+        uuid: z.string().min(1),
+        fqn: z.string().min(1),
+        coord_convention: coordConventionSchema.optional(),
+        has_coord_convention: z.boolean().optional(),
+    })
+    .passthrough();
+
+/** SpatialDDS 1.8 Core `PoseSE3`: translation `t` + quaternion `q`. */
+export const poseSE3Schema = z
+    .object({
+        t: vec3Schema,
+        q: quaternionXyzwSchema,
+    })
+    .passthrough();
+
+/**
+ * SpatialDDS 1.8 Core `FramedPose` (`pose`, `frame_ref`, optional `cov` / `stamp`).
+ * `@extensibility(APPENDABLE)`: unknown keys are kept. Also accepts camelCase `frameRef`.
+ */
+export const framedPoseSchema = z.preprocess(
+    (value) => {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+            const record = value as Record<string, unknown>;
+            if (record.frame_ref === undefined && record.frameRef !== undefined) {
+                const { frameRef, ...rest } = record;
+                return { ...rest, frame_ref: frameRef };
+            }
+        }
+        return value;
+    },
+    z
         .object({
-            sec: z.number(),
-            nanosec: z.number(),
+            pose: poseSE3Schema,
+            frame_ref: frameRefSchema,
+            cov: covMatrixSchema.optional(),
+            stamp: timeSchema.optional(),
         })
-        .optional(),
-});
+        .passthrough()
+);
 
 export const refSchema = z.object({
     contentType: z.string(),
@@ -83,32 +135,34 @@ export const defSchema = z.object({
 });
 
 /**
- * SCR **content** body: requires **geopose** and/or **framedPose** (at least one).
- * Legacy records supply **geopose** only; indoor / metric content may use **framedPose** only.
+ * SCR **content** body. Pose must be expressed as OGC `geopose` (geodetic), SpatialDDS `framedPose`
+ * (metric, in a named frame), or both. `framedPose`, when present, follows SpatialDDS 1.8 Core
+ * (`FramedPose` / `FrameRef` / `PoseSE3`; structs are APPENDABLE).
  */
-const contentSchemaBase = z.object({
-    id: z.string(),
-    type: z.string(),
-    title: z.string(),
-    description: z.string().optional(),
-    keywords: z.array(z.string()).optional(),
-    placekey: z.string().optional(),
-    refs: z.array(refSchema).optional(),
-    geopose: geoPoseSchema.optional(),
-    framedPose: framedPoseSchema.optional(),
-    size: z.number().optional(),
-    bbox: z.string().optional(),
-    definitions: z.array(defSchema).optional(),
-});
-
-export const contentSchema = contentSchemaBase.superRefine((data, ctx) => {
-    if (data.geopose === undefined && data.framedPose === undefined) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'SCR content must include geopose and/or framedPose',
-        });
-    }
-});
+export const contentSchema = z
+    .object({
+        id: z.string(),
+        type: z.string(),
+        title: z.string(),
+        description: z.string().optional(),
+        keywords: z.array(z.string()).optional(),
+        placekey: z.string().optional(),
+        refs: z.array(refSchema).optional(),
+        geopose: geoPoseSchema.optional(),
+        framedPose: framedPoseSchema.optional(),
+        size: z.number().optional(),
+        bbox: z.string().optional(),
+        definitions: z.array(defSchema).optional(),
+    })
+    .superRefine((content, ctx) => {
+        if (content.geopose === undefined && content.framedPose === undefined) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: 'At least one of geopose or framedPose is required',
+                path: ['geopose'],
+            });
+        }
+    });
 
 export const scrNoIdSchema = z.object({
     type: z.string(),
@@ -130,6 +184,12 @@ export type Geopose = z.infer<typeof geoPoseSchema>;
 export type Quaternion = z.infer<typeof quaternionSchema>;
 export type Position = z.infer<typeof positionSchema>;
 export type FrameRef = z.infer<typeof frameRefSchema>;
+export type PoseSE3 = z.infer<typeof poseSE3Schema>;
+export type Vec3 = z.infer<typeof vec3Schema>;
+export type QuaternionXYZW = z.infer<typeof quaternionXyzwSchema>;
+export type Time = z.infer<typeof timeSchema>;
+export type CoordConvention = z.infer<typeof coordConventionSchema>;
+export type CovMatrix = z.infer<typeof covMatrixSchema>;
 export type FramedPose = z.infer<typeof framedPoseSchema>;
 // Allows to return local JSON response for debugging
 // When this is true, no server access is done, but a local result is returned instead.
@@ -348,10 +408,10 @@ export const localResults = [
             title: 'framed-only model',
             url: 'https://www.example.com/framed.glb',
             framedPose: {
-                frameRef: { uuid: 'map-room', fqn: 'vendor:MapRoom' },
+                frame_ref: { uuid: 'map-room', fqn: 'vendor:MapRoom' },
                 pose: {
-                    t: { x: 1, y: 0, z: -0.5 },
-                    q: { x: 0, y: 0, z: 0, w: 1 },
+                    t: [1, 0, -0.5],
+                    q: [0, 0, 0, 1],
                 },
             },
             size: 50,

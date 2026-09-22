@@ -1,0 +1,27 @@
+{
+  "type": "scr",
+  "content": {
+    "id": "framed-1",
+    "type": "3d",
+    "title": "indoor model",
+    "refs": [{
+      "contentType": "model/gltf-binary",
+      "url": "http://www.example.com/room.glb"
+    }],
+    "framedPose": {
+      "pose": {
+        "t": [1, 0, -0.5],
+        "q": [0, 0, 0, 1]
+      },
+      "frame_ref": {
+        "uuid": "map-room",
+        "fqn": "vendor:MapRoom",
+        "coord_convention": "ENU"
+      },
+      "stamp": {
+        "sec": 1714071000,
+        "nanosec": 0
+      }
+    }
+  }
+}

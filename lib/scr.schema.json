@@ -101,6 +101,109 @@
           },
           "required": ["position", "quaternion"]
         },
+        "framedPose": {
+          "description": "SpatialDDS 1.8 Core FramedPose (APPENDABLE). An alternative to geopose for expressing pose in a named metric frame. At least one of geopose or framedPose is required; both may be present. Canonical JSON uses frame_ref, Vec3/QuaternionXYZW arrays, and optional cov/stamp/coord_convention.",
+          "type": "object",
+          "properties": {
+            "pose": {
+              "type": "object",
+              "properties": {
+                "t": {
+                  "description": "SpatialDDS Vec3: [x, y, z] or {x, y, z}",
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": { "type": "number" },
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": { "type": "number" },
+                        "y": { "type": "number" },
+                        "z": { "type": "number" }
+                      },
+                      "required": ["x", "y", "z"]
+                    }
+                  ]
+                },
+                "q": {
+                  "description": "SpatialDDS QuaternionXYZW GeoPose order (x, y, z, w): array or {x, y, z, w}",
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": { "type": "number" },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "x": { "type": "number", "default": 0 },
+                        "y": { "type": "number", "default": 0 },
+                        "z": { "type": "number", "default": 0 },
+                        "w": { "type": "number", "default": 1 }
+                      },
+                      "required": ["x", "y", "z", "w"]
+                    }
+                  ]
+                }
+              },
+              "required": ["t", "q"]
+            },
+            "frame_ref": { "$ref": "#/definitions/FrameRef" },
+            "frameRef": { "$ref": "#/definitions/FrameRef" },
+            "cov": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["COV_NONE", "COV_POS3", "COV_POSE6", "COV_ROT3", "COV_POSE6_TWIST6"]
+                },
+                "none": {},
+                "pos": {
+                  "type": "array",
+                  "items": { "type": "number" },
+                  "minItems": 9,
+                  "maxItems": 9
+                },
+                "pose": {
+                  "type": "array",
+                  "items": { "type": "number" },
+                  "minItems": 36,
+                  "maxItems": 36
+                },
+                "rot": {
+                  "type": "array",
+                  "items": { "type": "number" },
+                  "minItems": 9,
+                  "maxItems": 9
+                },
+                "pose_twist": {
+                  "type": "array",
+                  "items": { "type": "number" },
+                  "minItems": 144,
+                  "maxItems": 144
+                }
+              },
+              "required": ["type"]
+            },
+            "stamp": {
+              "type": "object",
+              "properties": {
+                "sec": { "type": "number" },
+                "nanosec": { "type": "number", "minimum": 0, "maximum": 999999999 }
+              },
+              "required": ["sec", "nanosec"]
+            }
+          },
+          "required": ["pose"],
+          "anyOf": [
+            { "required": ["frame_ref"] },
+            { "required": ["frameRef"] }
+          ]
+        },
         "size": {
           "type": "number",
           "default": 0
@@ -126,8 +229,35 @@
           }
         }
       },
-      "required": ["id", "type", "title", "refs", "geopose"]
+      "required": ["id", "type", "title"],
+      "anyOf": [
+        { "required": ["geopose"] },
+        { "required": ["framedPose"] }
+      ]
     }
   },
-  "required": [ "type", "content" ]
+  "required": [ "type", "content" ],
+  "definitions": {
+    "FrameRef": {
+      "type": "object",
+      "properties": {
+        "uuid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fqn": {
+          "type": "string",
+          "minLength": 1
+        },
+        "coord_convention": {
+          "type": "string",
+          "enum": ["ENU", "CV", "GRAPHICS", "UNITY_LH", "NED", "OTHER"]
+        },
+        "has_coord_convention": {
+          "type": "boolean"
+        }
+      },
+      "required": ["uuid", "fqn"]
+    }
+  }
 }

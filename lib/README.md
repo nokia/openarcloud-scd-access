@@ -8,9 +8,24 @@ Spatial Content Discovery
 - [https://github.com/OpenArCloud/oscp-spatial-content-discovery](https://github.com/OpenArCloud/oscp-spatial-content-discovery)
 
 
+### New with version 0.4.1:
+- Optional SpatialDDS 1.8 `FramedPose` on SCR content (`framedPose`): `pose` (`t`/`q` arrays), `frame_ref`, optional `cov`, `stamp`, and `coord_convention`. Extra APPENDABLE fields are kept.
+- `geopose` and `framedPose` are alternative pose representations; at least one is required, and both may be present.
+- JSON schema (`scr.schema.json`) and Zod schemas aligned with SpatialDDS 1.8 Core.
+
 ### New with version 0.4.0:
-- Optional no-auth/dev `init` (empty or `"disabled"` Auth0 settings)
 - Svelte is a peer dependency; Svelte 4 and Svelte 5 are supported
+
+### New with version 0.3.1:
+- Optional no-auth/dev `init` (empty or `"disabled"` Auth0 settings)
+- `auth0` exposed via getter (was always `null` on the returned object)
+- `loading` is toggled true/false around `init`
+- empty tokens allowed on `postContent` / `putContent` for no-auth
+- `"type": "module"` in package.json
+
+### New with version 0.3.0:
+- **Breaking changes**
+- upgrade to `@auth0/auth0-spa-js` v2 API (`createAuth0Client`, `authorizationParams`, `logoutParams`)
 
 ### New with version 0.2.0:
 - **Breaking changes**
@@ -56,13 +71,11 @@ Requests content with provided id from the regional server for the provided coun
 Post a content to Spatial Content Discovery server of provided region
 
     function postScrFile(url, topic, file, token)
-Post the content of a .json file to Spatial Content Discovery server of provided region
+Post the content of a .json file to Spatial Content Discovery server of provided region.
+The file is parsed and validated with the Zod SCR schema (`scrNoIdSchema`).
 
     function putContent(url, topic, scr, id, token)
 Send an edited SCR record to the server
-
-    function validateScr(scr, fileName = '')
-Validate the provided Spatial Content Record against the SCR json schema
 
     function searchContentsForTenant(url, topic, token)
 Request all content for the current tenant in the provided topic

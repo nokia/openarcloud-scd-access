@@ -8,6 +8,10 @@ Spatial Content Discovery
 - [https://github.com/OpenArCloud/oscp-spatial-content-discovery](https://github.com/OpenArCloud/oscp-spatial-content-discovery)
 
 
+### New with version 0.4.0:
+- Optional no-auth/dev `init` (empty or `"disabled"` Auth0 settings)
+- Svelte is a peer dependency; Svelte 4 and Svelte 5 are supported
+
 ### New with version 0.2.0:
 - **Breaking changes**
 - conversion from JavaScript to TypeScript

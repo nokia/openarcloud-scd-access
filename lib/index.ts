@@ -124,9 +124,24 @@ export const framedPoseSchema = z.preprocess(
         .passthrough()
 );
 
+/**
+ * Absolute http(s) URL, or a root-relative path in the client public folder.
+ * Protocol-relative URLs (`//host/...`) are rejected.
+ * Keep this pattern aligned with `RefDto` in oscp-spatial-content-discovery and `scr.schema.json`.
+ *
+ * Accepted examples:
+ * - `https://www.example.com/cat.glb`
+ * - `http://www.example.com/mesh.gltf`
+ * - `https://example.com:8080/a/b.glb?x=1&y=2#frag`
+ * - `/media/pointclouds/cloud1.ply`
+ * - `/media/video/video_Nokia105.mp4`
+ * - `/file%20name.glb`
+ */
+export const refUrlPattern = /^(https?:\/\/[^\s]+|\/(?!\/)[\w\-./%~]+)$/;
+
 export const refSchema = z.object({
     contentType: z.string(),
-    url: z.string().url(),
+    url: z.string().regex(refUrlPattern, 'url must be an absolute http(s) URL or a root-relative client public path'),
 });
 
 export const defSchema = z.object({

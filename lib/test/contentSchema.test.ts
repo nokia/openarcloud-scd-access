@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { contentSchema, framedPoseSchema, scrNoIdSchema, scrSchema } from '../index.ts';
+import { contentSchema, framedPoseSchema, refUrlPattern, scrNoIdSchema, scrSchema } from '../index.ts';
 import emptyScr from '../scr.empty.json';
 import scrJsonSchema from '../scr.schema.json';
 import geoSample from '../../test/scr.json';
@@ -165,5 +165,51 @@ describe('JSON fixtures and scr.schema.json', () => {
         assert.ok(!content.required.includes('geopose'));
         assert.ok(!content.required.includes('framedPose'));
         assert.deepEqual(content.anyOf, [{ required: ['geopose'] }, { required: ['framedPose'] }]);
+    });
+
+    it('keeps the JSON Schema ref url pattern aligned with refUrlPattern', () => {
+        const pattern = scrJsonSchema.properties.content.properties.refs.items.properties.url.pattern;
+        assert.equal(pattern, refUrlPattern.source);
+    });
+});
+
+describe('ref url', () => {
+    const base = {
+        id: 'c',
+        type: '3D',
+        title: 't',
+        geopose: {
+            position: { lon: 1, lat: 2, h: 3 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 },
+        },
+    };
+
+    function withUrl(url: string) {
+        return contentSchema.safeParse({
+            ...base,
+            refs: [{ contentType: 'model/gltf-binary', url }],
+        });
+    }
+
+    it('accepts absolute http(s) URLs', () => {
+        assert.equal(withUrl('https://www.example.com/cat.glb').success, true);
+        assert.equal(withUrl('http://www.example.com/mesh.gltf').success, true);
+        assert.equal(withUrl('https://example.com/a?x=1&y=2#frag').success, true);
+        assert.equal(withUrl('http://localhost:5173/media/a.json').success, true);
+    });
+
+    it('accepts root-relative client public paths', () => {
+        assert.equal(withUrl('/media/pois/nokia_private.json').success, true);
+        assert.equal(withUrl('/media/video/video_Nokia105.mp4').success, true);
+        assert.equal(withUrl('/file%20name.glb').success, true);
+    });
+
+    it('rejects values that are neither an absolute http(s) URL nor a root-relative public path', () => {
+        assert.equal(withUrl('//evil.com/file.glb').success, false);
+        assert.equal(withUrl('www.example.com/a.glb').success, false);
+        assert.equal(withUrl('media/file.glb').success, false);
+        assert.equal(withUrl('javascript:alert(1)').success, false);
+        assert.equal(withUrl('ftp://example.com/a.glb').success, false);
+        assert.equal(withUrl('/path/file.glb?v=1').success, false);
     });
 });

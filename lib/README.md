@@ -8,6 +8,9 @@ Spatial Content Discovery
 - [https://github.com/OpenArCloud/oscp-spatial-content-discovery](https://github.com/OpenArCloud/oscp-spatial-content-discovery)
 
 
+### New with version 0.4.3:
+- SCR ref `url` accepts an absolute http(s) URL or a root-relative client public path (for example `/media/pointclouds/cloud1.ply`).
+
 ### New with version 0.4.2:
 - Requests accept `application/json` as well as `application/vnd.oscp+json; version=1.0`, so gateways that reject the vendor type alone still return content records.
 - Failed requests include the method, URL, status, and response body.

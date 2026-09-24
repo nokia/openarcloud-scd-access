@@ -8,6 +8,10 @@ Spatial Content Discovery
 - [https://github.com/OpenArCloud/oscp-spatial-content-discovery](https://github.com/OpenArCloud/oscp-spatial-content-discovery)
 
 
+### New with version 0.4.2:
+- Requests accept `application/json` as well as `application/vnd.oscp+json; version=1.0`, so gateways that reject the vendor type alone still return content records.
+- Failed requests include the method, URL, status, and response body.
+
 ### New with version 0.4.1:
 - Optional SpatialDDS 1.8 `FramedPose` on SCR content (`framedPose`): `pose` (`t`/`q` arrays), `frame_ref`, optional `cov`, `stamp`, and `coord_convention`. Extra APPENDABLE fields are kept.
 - `geopose` and `framedPose` are alternative pose representations; at least one is required, and both may be present.

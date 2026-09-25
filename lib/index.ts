@@ -222,6 +222,53 @@ const DELETE_METHOD = 'delete';
 
 const scrsPath = 'scrs';
 
+/** Topic lists already fetched, keyed by SCD base URL. */
+const supportedTopicsByServer = new Map<string, string[]>();
+
+function resolveBaseUrl(url: string): string {
+    const baseUrl = url.trim().replace(/\/+$/, '');
+    if (baseUrl === '') {
+        throw new Error('SCD URL is not set');
+    }
+    return baseUrl;
+}
+
+function parseTopicList(payload: unknown, url: string): string[] {
+    if (!Array.isArray(payload) || payload.some((topic) => typeof topic !== 'string' || topic.trim() === '')) {
+        throw new Error(`GET ${url}/topics returned an invalid topic list`);
+    }
+    return payload.map((topic) => topic.trim().toLowerCase());
+}
+
+/**
+ * Topic names served by one SCD instance (`GET /topics`).
+ * Results are cached per server URL, so several SCD hosts keep separate lists.
+ */
+export async function getSupportedTopics(url: string): Promise<string[]> {
+    const baseUrl = resolveBaseUrl(url);
+    const cached = supportedTopicsByServer.get(baseUrl);
+    if (cached) {
+        return [...cached];
+    }
+
+    const response = await request(`${baseUrl}/topics`);
+    const topics = parseTopicList(await response.json(), baseUrl);
+    supportedTopicsByServer.set(baseUrl, topics);
+    return [...topics];
+}
+
+/**
+ * Whether `topic` is served by the SCD instance at `url`.
+ * Comparison is case-insensitive, matching the server's lowercasing of topic path parameters.
+ */
+export async function isSupportedTopic(url: string, topic: string): Promise<boolean> {
+    if (topic === undefined || topic.trim() === '') {
+        return false;
+    }
+    const topics = await getSupportedTopics(url);
+    return topics.includes(topic.trim().toLowerCase());
+}
+
 /**
  * Requests the available contents in the provided location for a specific topic
  * The location to provide should be approximate, to prevent exposing exact client locations.

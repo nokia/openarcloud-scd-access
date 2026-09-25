@@ -8,6 +8,10 @@ Spatial Content Discovery
 - [https://github.com/OpenArCloud/oscp-spatial-content-discovery](https://github.com/OpenArCloud/oscp-spatial-content-discovery)
 
 
+### New with version 0.5.0:
+- `getSupportedTopics(url)` requests `GET /topics` from that SCD instance. Lists are cached per server URL.
+- `isSupportedTopic(url, topic)` checks one topic name against that same server, case-insensitively.
+
 ### New with version 0.4.3:
 - SCR ref `url` accepts an absolute http(s) URL or a root-relative client public path (for example `/media/pointclouds/cloud1.ply`).
 
@@ -67,6 +71,12 @@ Spatial Content Discovery
 
 
 ### Currently available functions are:
+    function getSupportedTopics(url)
+Requests the topic names served by one SCD instance (`GET /topics`)
+
+    function isSupportedTopic(url, topic)
+Returns whether that SCD instance serves the topic name
+
     function getContentsAtLocation(url, topic, h3Index)
 Requests content available around H3Index from the regional server for the provided
 countryCode
